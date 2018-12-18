@@ -75,4 +75,16 @@ https://www.androiddevtools.cn/
 安装后打开SDK Tools，下载必要组件：  
 ![image](https://github.com/QustRobot/AppOnCar/blob/master/images/6.png)  
 选择需要的API：  
-![image](https://github.com/QustRobot/AppOnCar/blob/master/images/7.png)
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/7.png)   
+  
+3.Android NDK：  
+https://developer.android.com/ndk/downloads/  
+下载解压即可。  
+环境变量设置：  
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/8.png)  
+以上安装完成，在QT中填入路径即可：  
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/9.png)  
+最后创建AVD，方便电脑虚拟机运行安卓程序：  
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/10.png)  
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/11.png)  
+如果创建不成功，检查Android SDK 是否都正确下载安装。
