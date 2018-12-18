@@ -288,3 +288,23 @@ void shouDongThread()
 			}  
     }  
 }  
+
+
+4 功能测试  
+4.1测试手机遥控功能  
+（1）先编译小车服务端程序server3.c和迷宫程序maze.c；  
+（2）运行服务端程序server3，显示如下，说明两个线程创建成功，等待与手机连接。  
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/12.png)  
+（3）手机连接小车WiFi：QUST-ROBOT-XXX，密码12345678；打开手机“智能车遥控器”，输入IP和端口号，显示界面如下：  
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/13.png)  
+（4）点击Connect按钮，显示accept success,表示和手机连接成功。
+按住“向上”按钮，小车前进，松开小车停止。小车接收到的信息如下：  
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/14.png)  
+
+4.2测试走迷宫功能  
+（1）迷宫如下图所示  
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/15.png)  
+（2）将小车放在起点位置，点击遥控“走迷宫”按钮，小车用时13秒到达终点，中途未碰到障碍物，小车路线为：  
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/16.png)  
+（3）小车到达终点，点击“stop”按钮，小车停止，测试结束，实现了预期的功能。  
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/17.png)  
