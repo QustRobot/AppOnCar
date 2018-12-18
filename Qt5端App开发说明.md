@@ -39,4 +39,40 @@
 （3）软件体系结构设计  
 手机客户端向树莓派小车发送命令，小车根据接收的命令进行相应的动作：前进、后退、左转、右转、走迷宫、停止。   
 软件体系结构图如下图所示：  
-![image](https://github.com/QustRobot/AppOnCar/blob/master/images/2.png)
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/2.PNG)
+
+3软件详细设计    
+3.1  QT on Android 开发环境的搭建  
+使用的QT版本QT5.11：  
+	http://download.qt.io/archive/qt/  
+	安装程序：qt-opensource-windows-x86-5.11.2  
+	安装组件选择：  
+Android 开发环境的搭建  
+在QT 5.11“选项->设备->Android”配置中，点击绿色的下载箭头即可跳转到下载页面：  
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/3.png)    
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/4.png)  
+
+1.JDK的安装：  
+https://www.oracle.com/technetwork/java/javase/downloads/index.html  
+所用JDK版本：jdk-8u191-windows-x64  
+环境变量设置：  
+变量名：Path  
+变量值：;%JAVA_HOME%\bin;%JAVA_HOME%\jre\bin  
+
+变量名：JAVA_HOME  
+变量值：C:\Program Files\Java\jdk1.8.0_191  
+
+变量名：CLASS_PATH  
+变量值：.;%JAVA_HOME%\lib;%JAVA_HOME%\lib\tools.jar  
+
+最后验证JDK是否已正确安装：JAVAC -version  
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/5.png)  
+
+2.Android SDK：  
+https://developer.android.com/studio/  
+或者：  
+https://www.androiddevtools.cn/  
+安装后打开SDK Tools，下载必要组件：  
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/6.png)  
+选择需要的API：  
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/7.png)
