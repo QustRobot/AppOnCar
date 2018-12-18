@@ -39,4 +39,4 @@
 （3）软件体系结构设计  
 手机客户端向树莓派小车发送命令，小车根据接收的命令进行相应的动作：前进、后退、左转、右转、走迷宫、停止。   
 软件体系结构图如下图所示：  
-![image](https://github.com/QustRobot/AppOnCar/blob/master/images/2.)
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/2.png)
