@@ -32,14 +32,14 @@
 软件部分：迷宫程序设计，实现小车自动走迷宫；手机App设计用于远程遥控。  
 2.3 硬件体系架构设计  
 如下图所示：  
-![image](https://github.com/QustRobot/AppOnCar/blob/master/images/1.PNG)
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/1.PNG)   
 2.4 软件体系架构设计  
 （1）操作系统选择：小车基于Linux操作系统，采用c/c++编程。  
 （2）开发环境：手机App编程使用Qt开发环境。  
 （3）软件体系结构设计  
 手机客户端向树莓派小车发送命令，小车根据接收的命令进行相应的动作：前进、后退、左转、右转、走迷宫、停止。   
 软件体系结构图如下图所示：  
-![image](https://github.com/QustRobot/AppOnCar/blob/master/images/2.PNG)
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/2.PNG)  
 
 3软件详细设计    
 3.1  QT on Android 开发环境的搭建  
