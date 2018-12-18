@@ -88,3 +88,203 @@ https://developer.android.com/ndk/downloads/
 ![image](https://github.com/QustRobot/AppOnCar/blob/master/images/10.png)  
 ![image](https://github.com/QustRobot/AppOnCar/blob/master/images/11.png)  
 如果创建不成功，检查Android SDK 是否都正确下载安装。
+
+3.2 应用程序设计与调试  
+1．迷宫程序设计  
+while(1)  
+    {  
+	     	//获取当前三个方向的距离和两个光传感器的信号  
+	    disf = disMeasure(1);  
+            disl = disMeasure(2);  
+            disr = disMeasure(3);    
+	    SR = digitalRead(RIGHT);    
+            SL = digitalRead(LEFT);  
+             if(SL==HIGH && SR==HIGH && (disf<25||disf>2000))    
+//测得前方障碍的距离小于30cm时做出如下响应  
+            {  
+              if((disr<20||disr>2000)&&(disl<20||disl >2000)) //两侧都有障碍  
+              {  
+		 		brake(1);  		
+                                left(10);       //180度掉头 需要实际调整！！！  
+              }  
+              else if(disr<disl)//只有右侧有障碍物体  
+              {  
+				brake(1);  
+                left(5);        //左转  
+				delay(50);  
+              }  
+              else              //左边有障碍  
+              {  
+				brake(1);  
+                right(5);       //右转  
+				delay(50);  
+              }  
+            }  
+
+		 if(SL==LOW && SR==LOW) //光传感器有信号，近距离两侧都有障碍  
+		{  
+				if(disr<disl){back(2);left(4);}  //向距离大的一侧转弯调整  
+					else {back(2);right(4);}  
+		}  
+		else if(SL==LOW || SR==LOW)//近距离一侧有障碍  
+		{  
+			if(disr<disl){back(2);left(2);}      //向距离大的一侧转弯调整  
+					else {back(2);right(2);}  
+		}   
+		else//没有障碍  
+		{  
+			run();  
+			delay(100);  
+		}  
+	}  
+2.小车服务端关键程序  
+（1）main()函数  
+在main函数中创建两个线程，一个手动控制线程，一个TCP通信线程。在手动控制线程中，设置while循环，动作状态变量shouDongActive的值映射为小车的动作状态。  
+int main()  
+{  
+    wiringPiSetup();  
+    /*WiringPi GPIO*/  
+    pinMode (1, OUTPUT);  
+    pinMode (4, OUTPUT);  
+    pinMode (5, OUTPUT);  
+    pinMode (6, OUTPUT);  
+    softPwmCreate(1,1,500);  
+    softPwmCreate(4,1,500);  
+    softPwmCreate(5,1,500);  
+    softPwmCreate(6,1,500);  
+    ////////////////////////////////////////////创建线程：  
+    ret=pthread_create(&id1,NULL,(void *) shouDongThread,NULL);//←手动控制线程  
+    if(ret!=0)  
+    {  
+        printf("Create pthread error\n");  
+        exit(1);  
+    }  
+    ret=pthread_create(&id2,NULL,(void *) socketThread,NULL);//←Tcp线程  
+    if(ret!=0)  
+    {  
+        printf("Create pthread error\n");  
+        exit(1);  
+    }  
+    pthread_join(id1,NULL);  
+    pthread_join(id2,NULL);  
+}  
+（2）TCP通信线程  
+在TCP线程中，先建立连接，接收到的字符存入buf中，buf的内容映射为小车动作状态变量shouDongActive的值，和创建、结束迷宫进程。  
+void  socketThread()  
+{  
+    struct sockaddr_in server_sockaddr,client_sockaddr;  
+    int sin_size=1,recvbytes;  
+    int sockfd;//client_fd;  
+
+    if((sockfd=socket(AF_INET,SOCK_STREAM,0))==-1)  
+    {  
+        perror("socket");  
+        exit(1);  
+    }  
+    printf("socket success! sockfd=%d\n",sockfd);  
+  
+    int val = 1;  
+    int ret = setsockopt(sockfd,SOL_SOCKET,SO_REUSEADDR,(void *)&val,sizeof(int));  
+    if(ret == -1)  
+    {  
+        printf("setsockopt");  
+    }  
+
+    server_sockaddr.sin_family=AF_INET;  
+    server_sockaddr.sin_port=htons(SERVPORT);  
+    server_sockaddr.sin_addr.s_addr=INADDR_ANY;  
+    bzero(&(server_sockaddr.sin_zero),8);  
+
+    if(bind(sockfd,(struct sockaddr *)&server_sockaddr,sizeof(struct sockaddr))==-1)  
+    {  
+        perror("bind");  
+        exit(1);  
+    }  
+    printf("bind success!\n");  
+    if(listen(sockfd,BACKLOG)==-1)  
+    {  
+        perror("listen");  
+        exit(1);  
+    }  
+    printf("listen success\n");  
+    if((client_fd=accept(sockfd,(struct sockaddr *)&client_sockaddr,&sin_size))==-1)  
+    {  
+        perror("accept");  
+        exit(1);  
+    }  
+    printf("accept success\n");  
+
+    while(1)  
+    {  
+        if((recvbytes=recv(client_fd,buf,1,0))>0)  
+        {  
+            printf("Receive:%s\n",buf);  
+            switch(buf[0])  
+            {  
+            case '0':  
+                system("sudo killall maze");//接收到0，结束迷宫程序  
+                shouDongActive = 0;      //停止手动程序  
+                break;  
+            case '1':  
+                system("sudo killall maze");//接收到1，结束迷宫程序  
+                shouDongActive = 1; //车的动作状态为前进  
+                break;  
+            case '2':   
+                system("sudo killall maze");//接收到2，结束迷宫程序  
+                shouDongActive = 2;//车的动作状态为后退  
+                break;  
+            case '3':  
+                system("sudo killall maze");//接收到3，结束迷宫程序  
+                shouDongActive = 3;//车的动作状态为左转  
+                break;  
+            case '4':  
+                system("sudo killall maze");//接收到4，结束迷宫程序  
+                shouDongActive = 4;//车的动作状态为右转  
+                break;  
+            case '5':  
+                system("sudo killall maze");//接收到5，结束迷宫程序  
+                system("sudo ./maze&"); //后台运作迷宫程序  
+                shouDongActive = 0; //停止手动控制  
+                printf("5!");  
+                break;  
+  
+            case '9':  
+                system("sudo killall maze");//接收到9，结束迷宫程序  
+                close(client_fd);//关闭端口号  
+                close(sockfd);  
+                shouDongActive = 0; //停止手动控制  
+                system("sudo ./server3&");//重新运行服务端程序  
+                exit(0);  
+                break;  
+            default:  
+                break;  
+            }  
+        }  
+
+        else if(recvbytes<=0)  
+        {  
+            printf("Connection closed!\n");  
+            close(client_fd);  
+            client_fd=accept(sockfd,(struct sockaddr *)&client_sockaddr,&sin_size);  
+        }  
+    }  
+    printf("thread over\n");  
+}  
+（3）手动控制线程  
+void shouDongThread()  
+{  
+	  brake(1);  
+    printf("shouDongThread start!!\n");  
+    while(1)  
+    {  
+			switch(shouDongActive)  
+			{  
+			case 0:brake(1);break; //动作状态为0，车停止  
+			case 1:run();break;    //动作状态为1，车前进  
+			case 2:back();break;   //动作状态为2，车后退  
+			case 3:left(1);break;  //动作状态为3，车左转  
+			case 4:right(1);break; //动作状态为4，车右转  
+			default:break;  
+			}  
+    }  
+}  
