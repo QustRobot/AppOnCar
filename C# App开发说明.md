@@ -94,7 +94,448 @@ LM2596S开关电源稳压电路(支持6~12V宽电压输入，5V输出)
 电压：DC 5V；静态电流：小于2 mA  
 感应角度：不大于15 度；探测距离：2 cm-450 cm  
 高精度：可达0.3 cm  
+3.2.软件详细设计  
+3.2.1.小车端  
+程序结构图如下：  
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/58.png)   
+程序流程图如下：
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/59.png)   
+3.2.1.0.全局变量和编译预处理指令  
+#define Front	28 //前方超声波模块Trig引脚  
+#define Left	24 //左方超声波模块Trig引脚  
+#define Right	21 //右方超声波模块Trig引脚  
+int maze, ret, t_left, t_right;  
+上述全局变量分别为：迷宫寻路使能信号，距离回传使能信号，左转时间和右转时间。  
+左转时间和右转时间分别控制迷宫寻路模式中的直角左右转弯时间，由于小车左右电机存在工艺或者供电偏差，动力会有些许差异，因此通过这两个变量进行校正。  
+3.2.1.1.初始化函数void ultraInit(void)  
+```
+wiringPiSetup();	//使用wiringPi引脚编号
+GAS = 0; 			//将定义的全局变量初始化
+HEADING = 0;
+maze = 0;
+ret = 0;
+t_left = t_right = 530; 
+pinMode(1, OUTPUT);	//配置各引脚IO模式
+pinMode(4, OUTPUT);
+pinMode(5, OUTPUT);
+pinMode(6, OUTPUT);
+pinMode(Front + 1, INPUT);
+pinMode(Front, OUTPUT);
+pinMode(Left + 1, INPUT);
+pinMode(Left, OUTPUT);
+pinMode(Right + 1, INPUT);
+pinMode(Right, OUTPUT);
+softPwmCreate(1, 1, 500);//定义1、4、5、6引脚为软件PWM输出引脚
+softPwmCreate(4, 1, 500);//并设置PWM值上限为500，初始值为1
+softPwmCreate(5, 1, 500);
+softPwmCreate(6, 1, 500);
+```
+3.2.1.2.超声波测距函数float disMeasure(int a)  
+```
+digitalWrite(a, LOW);
+delayMicroseconds(2);
+digitalWrite(a, HIGH);
+delayMicroseconds(10);	  //发出超声波脉冲
+digitalWrite(a, LOW);
+while (!(digitalRead(a + 1) == 1));
+gettimeofday(&tv1, NULL);		   //获取当前时间
+while (!(digitalRead(a + 1) == 0));
+gettimeofday(&tv2, NULL);		   //获取当前时间
+start = tv1.tv_sec * 1000000 + tv1.tv_usec;   //微秒级的时间
+stop = tv2.tv_sec * 1000000 + tv2.tv_usec;
+dis = (float)(stop - start) / 1000000 * 34000 / 2;  //求出距离
+return dis;
+```
+3.2.1.3.基础行驶功能函数   
+包括前进、后退、原地左转、原地右转、原地左转（保持）、原地右转（保持）、停止等函数。其中后退和左转/右转（保持）将锁定状态并持续一定时间，时间可以通过参数控制。   
+3.2.1.4.高阶行驶功能函数void go(double gas, float turn)   
+```
+{
+	if (gas > 0)
+	{
+		softPwmWrite(1, 500 * gas*turn * 2);
+		softPwmWrite(4, 0);
+		softPwmWrite(5, 500 * gas* (1 - turn) * 2);
+		softPwmWrite(6, 0);
+	}
+	else
+	{
+		softPwmWrite(1, 0);
+		softPwmWrite(4, 500 * (-gas)*turn * 2);
+		softPwmWrite(5, 0);
+		softPwmWrite(6, 500 * (-gas)* (1 - turn) * 2);
+	}
+}
+```
+参数gas的取值范围[-1，1]，turn的取值范围[0,1]，两者精度均为0.1。  
+通过分割gas正负，确保行驶、转向逻辑正确。  
+此函数主要用于远程遥控，实现线性动力控制和线性差速转向控制。  
+3.2.1.5.测距回传函数void *RetDis(void *args)  
+
+测距回传流程图如下：
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/60.png)   
+```
+while (ret)
+{
+	int disF, disL, disR;
+	char sendbuff[12];
+	sendbuff[0] = 'F';
+	disF = disMeasure(Front);
+	sprintf(&sendbuff[1], "%03d", disF);
+	sendbuff[4] = 'L';
+	disL = disMeasure(Left);
+	sprintf(&sendbuff[5], "%03d", disL);
+	sendbuff[8] = 'R';
+	disR = disMeasure(Right);
+	sprintf(&sendbuff[9], "%03d", disR);
+	send(snd_fd, sendbuff, 12, 0);
+	delay(100);
+}
+```
+在新线程中每隔100ms测距一次并将结果通过Socket连接回传到控制端，精度为1。  
+通过线程取消函数pthread_cancel()可以直接终止。  
+3.2.1.6.迷宫寻路函数 void *MazeRunner(void *args)  
+
+迷宫寻路流程图如下：  
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/61.png)    
+通过线程取消函数pthread_cancel()可以直接终止。 
+```
+while (maze) 
+{
+	disF = disMeasure(Front);
+	disL = disMeasure(Left);
+	disR = disMeasure(Right);//测距
+	if (disMeasure(Front) > 25)
+	{
+		run(500);			//若无障碍则前进
+	}
+	else if (disF <= 25 && disL > 40 && disR < 30)
+	{
+		brake(100);
+		if (disF <= 25 && disL > 40 && disR < 30)
+		{
+			left_t(t_left + 100);
+			brake(100);
+			run(300);
+			delay(100);
+			brake(100);
+		}		//前方有障碍， Double Check左侧是否无障碍，若无则左转
+	}
+	else if (disF <= 25 && disL < disR)
+	{
+		brake(100);
+		if (disF <= 25 && disR > 40 && disL < 30)
+		{
+			right_t(t_right + 100);
+			brake(100);
+			run(300);
+			delay(100);
+			brake(100);
+		}		//前方有障碍， Double Check右侧是否无障碍，若无则右转
+	}
+	else if (disR < 10)
+		left_t(100);//行驶过程中，若右侧距墙小于10cm则向左修正
+	else if (disL < 10)
+		right_t(100); //行驶过程中，若左侧距墙小于10cm则向右修正
+	else
+		brake(1); //其他未知情况，停车
+}
+```
+
+3.2.1.7.数据包解析函数void ParseFrame(char *bf)  
+
+数据包全部都是以字符‘2’开头，字符‘#’结尾的，长度8或9字节的字符串指令。  
+指令包括控制指令和设置指令两种  
+控制指令包括：(‘?’表示不敏感)  
+迷宫寻路指令			2CM????#  
+线性动力控制指令 		2CG?±x.y#  
+线性差速转向控制指令 	2CH?±x.y#  
+前进指令 				2CF?????#  
+后退指令 				2CB?????#  
+左转指令 				2CL?????#  
+右转指令 				2CR?????#  
+停止指令 				2CS?????#  
+设置指令包括：  
+设置左转时间			2GL??xyz#  
+设置右转时间			2GR??xyz#  
+```
+if (*(bf) =='2'&&*(bf + 1) =='C' &&*(bf + 2) =='M' && *(bf + 7) =='#')
+{
+	maze = 1;
+	pthread_t mazerunner;
+	int ser = pthread_create(&mazerunner, NULL, MazeRunner, NULL);
+	if (ser != 0)
+		printf("pthread create mazerunner error!\n");
+	else
+		printf("mazerunner pthread created!/\n");
+}
+else if (*(bf) =='2'&&*(bf + 1) =='C' && *(bf + 2) =='G'&& *(bf + 8) =='#')
+{
+	char temp[4];
+	temp[0] = *(bf + 4);
+	temp[1] = *(bf + 5);
+	temp[2] = *(bf + 6);
+	temp[3] = *(bf + 7);
+	GAS = atof(temp);
+	printf("  GAS:%lf   Heading:%lf\n", GAS, HEADING);
+
+	go(GAS, HEADING);
+
+}
+else if (*(bf) =='2'&&*(bf + 1) =='C' && *(bf + 2) =='H'&& *(bf + 8) =='#')
+{
+	char temp[4];
+	temp[0] = *(bf + 4);
+	temp[1] = *(bf + 5);
+	temp[2] = *(bf + 6);
+	temp[3] = *(bf + 7);
+	if (GAS < 0)
+		HEADING = (atof(temp) + 1) / 2;
+	else
+		HEADING = (1 - (atof(temp) + 1) / 2);
+	printf("  GAS:%lf   Heading:%lf\n", GAS, HEADING);
+	go(GAS, HEADING);
+}
+else if (*(bf) =='2'&&*(bf + 1) =='C' && *(bf + 2) =='F'&& *(bf + 8) =='#')
+	run(500);
+else if (*(bf) =='2'&&*(bf + 1) =='C' && *(bf + 2) =='B'&& *(bf + 8) =='#')
+	back_t(1);
+else if (*(bf) =='2'&&*(bf + 1) =='C' && *(bf + 2) =='R'&& *(bf + 8) =='#')
+	right();
+	//right_t(t_right + 100);
+else if (*(bf) =='2'&&*(bf + 1) =='C' && *(bf + 2) =='L'&& *(bf + 8) =='#')
+	left();
+	//left_t(t_left + 100);
+else if (*(bf) =='2'&&*(bf + 1) =='C' && *(bf + 2) =='S'&& *(bf + 8) =='#')
+{
+	maze = 0;
+	GAS = 0;
+	HEADING = 0.5;
+	brake(1);
+}
+else if (*(bf) =='2'&&*(bf + 1) =='G' && *(bf + 2) =='L'&& *(bf + 8) =='#')
+{
+	char temp[4];
+	temp[0] = *(bf + 4);
+	temp[1] = *(bf + 5);
+	temp[2] = *(bf + 6);
+	temp[3] = *(bf + 7);
+	t_left = atoi(temp);
+}
+else if (*(bf) =='2'&&*(bf + 1) =='G' && *(bf + 2) =='R'&& *(bf + 8) =='#')
+{
+	char temp[4];
+	temp[0] = *(bf + 4);
+	temp[1] = *(bf + 5);
+	temp[2] = *(bf + 6);
+	temp[3] = *(bf + 7);
+	t_right = atoi(temp);
+}
+```
+3.2.1.8.main函数  
+
+程序入口函数，包括了变量定义，初始化以及Socket相关逻辑。  
+连接建立后，读取控制端发送进来的数据包，调用数据包解析函数进行解析并完成相应的控制功能。  
+```
+int fd, new_fd, numbytes;
+char buff[256];
+struct sockaddr_in server_addr;
+struct sockaddr_in client_addr;
+socklen_t struct_len;
+ultraInit();
+server_addr.sin_family = AF_INET;
+server_addr.sin_port = htons(8000);
+server_addr.sin_addr.s_addr = INADDR_ANY;
+bzero(&(server_addr.sin_zero), 8);
+struct_len = sizeof(struct sockaddr_in);
+fd = socket(AF_INET, SOCK_STREAM, 0);
+Bind(fd, (struct sockaddr *)&server_addr, sizeof(server_addr));
+printf("Bind Success!\n");
+Listen(fd, 2);
+printf("Listening....\n");
+printf("Ready for Accept,Waitting...\n");
+new_fd = Accept(fd, (struct sockaddr *)&client_addr, &struct_len);
+printf("Get the Client.\n");
+ret = 1;
+pthread_t retdis;
+int ser = pthread_create(&retdis, NULL, RetDis, &new_fd);
+if (ser != 0)
+	printf("pthread create RetDis error!\n");
+else
+	printf("RetDis pthread created!/\n");
+while (1)
+{
+	if ((numbytes = Read(new_fd, buff, sizeof(buff))) > 0)
+	{
+		Write(STDOUT_FILENO, buff, numbytes);
+		ParseFrame(buff);
+	}
+	else if ((numbytes = Read(new_fd, buff, sizeof(buff))) <= 0)
+	{
+		brake(1);
+		ret = 0;
+		pthread_cancel(retdis);
+		printf("Connetion closed!\n");
+		close(new_fd); //继续侦听客户端连接
+		new_fd = Accept(fd, (struct sockaddr *)&client_addr, &struct_len);
+		printf("Get the Client.\n");
+		ret = 1;
+		pthread_t retdis;
+		int ser = pthread_create(&retdis, NULL, RetDis, &new_fd);
+		if (ser != 0)
+			printf("pthread create RetDis error!\n");
+		else
+			printf("RetDis pthread created!/\n");
+	}
+}
+close(new_fd);
+close(fd);
+```
+3.2.2.控制端    
+3.2.2.1.UI设计    
+侧边栏打开     
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/62.png)    
+侧边栏关闭  
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/63.png)    
+侧边栏设计    
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/64.png)    
+操作区设计    
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/65.png)    
+3.2.2.2.代码逻辑设计（仅关键代码） 
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/66.png)  
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/67.png)  
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/68.png)  
+异步建立Socket连接   
+```
+StreamSocket socket = new StreamSocket();
+try
+{
+    if (adapter == null)
+    {
+        	await socket.ConnectAsync(hostName, PortNameForConnect.Text);
+        NotifyUser("Connected", NotifyType.StatusMessage);
+    }
+    else
+    {
+        NotifyUser(
+            "Connecting to: " + HostNameForConnect.Text +
+            " using network adapter " + adapter.NetworkAdapterId,
+            NotifyType.StatusMessage);
+        await socket.ConnectAsync(
+            hostName,
+            PortNameForConnect.Text,
+            SocketProtectionLevel.PlainSocket,
+            adapter);
+        NotifyUser(
+            "Connected using network adapter " + adapter.NetworkAdapterId,
+            NotifyType.StatusMessage);
+    }
+    SendBuffer("2CSaaaaa#");
+    SendBuffer("2GL" + string.Format("{0,5:0}", sliderL.Value) + '#');
+    SendBuffer("2GR" + string.Format("{0,5:0}", sliderR.Value) + '#');
+    ReadBuffer();
+}
+catch (Exception exception)
+{
+    NotifyUser("Connect failed with error: " + exception.Message, NotifyType.ErrorMessage);
+    ConnectSwitch.IsOn = false;
+}
+```
+创建新的StreamSocket对象，异步建立连接，建立连接后发送停止、设置指令并开始读取数据。    
+异步接收数据   
+```
+DataReader reader = new DataReader(socket.InputStream); 
+//实例化reader对象，并以StreamSocket的输入流为reader的来源
+reader.InputStreamOptions = InputStreamOptions.Partial; 
+ //采用异步方式
+await reader.LoadAsync(24); 
+ //获取一定大小的数据流
+string response = reader.ReadString(reader.UnconsumedBufferLength);  
+//获取字符串，指定为reader的未读取缓冲区的长度
+RecvF.Text = "Front: " + response.Substring(1, 3);
+RecvL.Text = "Left: " + response.Substring(5, 3);
+RecvR.Text = "Right: " + response.Substring(9, 3);
+ReadBuffer();//递归接收
+```
+异步发送数据   
+```
+var packetsToSend = new List<IBuffer>();
+packetsToSend.Add(
+Windows.Security.Cryptography.CryptographicBuffer.ConvertStringToBinary(message, Windows.Security.Cryptography.BinaryStringEncoding.Utf8));
+//将要发送的数据打包为写入接口使用的引用字节数组
+foreach (IBuffer packet in packetsToSend)
+{
+    await socket.OutputStream.WriteAsync(packet);//异步写入输出流
+}
+```
+加速度计  
+```
+private async void ReadingChanged(object sender, AccelerometerReadingChangedEventArgs e)
+{
+    await Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () =>
+    {
+        AccelerometerReading reading = e.Reading;
+        txtXAxis.Text = string.Format("{0,5:0.0}", reading.AccelerationX);
+        txtYAxis.Text = string.Format("{0,5:0.0}", reading.AccelerationY);
+        txtZAxis.Text = string.Format("{0,5:0.0}", -reading.AccelerationZ);
+    });
+}
+``` 
+当加速度计读数变化时，异步地将读数显示到侧边栏的对应三个文本框内。显示格式为5位，精确到0.1。这样可以简单的滤除干扰，提高性能。  
+当显示到文本框的读数发生变化时，将数值打包成命令发送到小车端。  
+模拟摇杆   
+```
+thumbX += e.HorizontalChange * 2;
+thumbY += e.VerticalChange * 2;
+RodX.Text = string.Format("{0,5:0.0}", Math.Atan(thumbX / thumbY)/1.6);/
+RodY.Text = string.Format("{0,5:0.0}", 
+-(thumbY / Math.Abs(thumbY)) * 
+(Math.Sqrt(thumbX * thumbX + thumbY * thumbY) / 300));
+//归一化输出动力值和角度值。
+if (thumbX * thumbX + thumbY * thumbY >= 300 * 300)
+{
+    thumbX = thumbX / (Math.Sqrt(thumbX * thumbX + thumbY * thumbY) / 300);
+    thumbY = thumbY / (Math.Sqrt(thumbX * thumbX + thumbY * thumbY) / 300);
+	//确保不会将小圆圈拖出大圆圈的范围。
+}
+RootThumb.Margin = new Thickness(0, 0, -thumbX, -thumbY);//更新坐标
+```
+4.功能测试  
+4.1.连接、测距回显功能测试   
+控制端连接到小车后，位于控制区的三个文本框能够正确显示前、左、后方的距离。如图：  
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/69.png)   
+4.2.迷宫寻路测试   
+控制端连接到小车后，打开Maze开关，小车启动，用时15秒从起点抵达终点。  
+抵达终点后，关闭Maze开关，控制台回显迷宫线程成功退出，小车顺利停下。
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/70.png)   
+4.3.重力感应控制测试  
+手机连接小车后，切换到重力感应控制模式。  
+前后绕Y轴转动手机，Z轴数据变化，小车相应做线性动力运动，并于控制台返回相应数值，完全符合预期。如图   
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/71.png)  
+左右绕Z轴转动手机，Y轴数据变化，控制台返回正确转向数值，完全符合预期。如图.   
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/72.png)   
+自由转动手机，小车按照手机姿态进行行驶，完全符合预期。  
+4.4.模拟摇杆控制测试  
+控制端连接小车后，切换到模拟摇杆控制模式  
+自由拖动小圆圈，小车按照模拟摇杆姿态做相应运动，并在控制台回显相应数值。如下图.  
+放下小圆圈，小车停止运动。  
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/73.png)   
+4.5.按键控制测试
+控制端连接到小车后，切换到按键控制模式
+按下（触摸）按键，小车相应做正确运动
+抬起（触摸）按键，小车停止运动
+ 
 
 
 
-![image](https://github.com/QustRobot/AppOnCar/blob/master/images/5.png) 
+
+
+
+
+
+
+
+
+
+
+
