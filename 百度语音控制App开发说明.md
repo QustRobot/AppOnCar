@@ -1,5 +1,7 @@
-1.系统定义  
-1.1	设计实现的功能  
+1.系统定义 
+=========================  
+1.1设计实现的功能   
+------------------------
 1.小车走迷宫  
 2.方向盘控制  
 3.语音控制  
@@ -39,7 +41,7 @@ Android客户端：只有一个Activity其中包含一个ViewPager，ViewPager�
 服务端命令解析系统：建立Socket服务器，读取来至Android客户端的命令数据，初步解析后分发给对应功能类型的处理函数处理。  
 ![image](https://github.com/QustRobot/AppOnCar/blob/master/images/44.png)    
 命令系统：
-
+(MainActivity.c)
 typedef enum comdType{//命令类型     
     	MAZE=1,		//迷宫  
 	KEYOPT,		//方向盘  
@@ -230,6 +232,73 @@ softPwmCreate(6, 1, 100);
         });
 }
 
-![image](https://github.com/QustRobot/AppOnCar/blob/master/images/45.png)
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/45.png)  
+
+3.2.1迷宫控制  
+迷宫程序：   
+fileUtil.h/c:配置文件定义和实现  
+struct Conf{  
+	float SPEEDSCALE; //最高速的比例0-1  
+	unsigned char DIS_LEFT;	//当前超声波探测器测量的距离大于DIS_LEFT，表左方有路,单位CM  
+	unsigned char DIS_COLLIDE_MIN;	//左贴墙最小距离  
+	unsigned char DIS_COLLIDE_MAX;	//左贴墙最大距离  
+	unsigned char DIS_COLLIDE_FRONT;//前进规避碰撞距离  
+	float ANGLEPERMT; //偏转每度所需毫秒值  
+};  
+ 
+int readConfFile(struct Conf* CONF);//读取配置文件   
+int writeConfFile(struct Conf* CONF);//写入配置文件   
+void printConf(struct Conf CONF);//打印配置信息  
+int praseConfStr(char* str,struct Conf* CONF);//解析配置字符串  
+
+maze.c:控制小车在迷宫中行走的主逻辑，主体逻辑如下  
+while(1){
+		leftDis=disMeasure(Trig1,Echo1);//超声波测距，测出左边距离
+		PLOG("leftDis = %0.2f cm\n", leftDis);
+		if(leftDis>=CONF.DIS_LEFT){//左边有路
+			PLOG("#############goLeft#############\n");
+			goLeft(saveLeftDis);//进入左道
+		}else
+			saveLeftDis=leftDis;
+		goLeftWall(leftDis);//在行走中判断小车与左墙的距离，并调整距离
+				
+		frontDis=disMeasure(Trig,Echo);//超声波测距，测出前方距离
+		frontPath=frontDis>=CONF.DIS_COLLIDE_FRONT;
+		PLOG("frontDis = %0.2f cm :frontPath=%d\n", frontDis,frontPath);
+		if(frontPath){				
+			PLOG("#############run#############\n");
+			run();//前进
+			delay(100);
+			continue;
+		}
+		else{
+			rightAngle(90+5);//进入右道
+		}
+	}
+
+carOpt.h:小车的控制操作，见硬件详细设计  
+Debug.h:调试用的头文件，一个宏定义，当编译时添加-DPDEBUG参数是便可以将PLOG打印功能使能，反之PLOG不会打印任何信息。  
+#ifdef PDEBUG   
+#define PLOG(fmt,args...) printf(fmt,##args)   
+#else    
+#define PLOG(fmt,args...) /*do nothing*/  
+#endif  
+Makefile:编译脚本  
+
+服务器迷宫功能：  
+命令格式  
+"1:1:0.8,30,5,10,10,7.0\n"  
+"1:2\n"  
+"1:3\n"   
+命令意义  
+"maze:conf:0.8,30,5,10,10,7.0\n"//命令类型:迷宫;配置参数为0.8,30...  
+"maze:start\n"//命令类型:迷宫;开始  
+"maze:end\n"//命令类型:迷宫;结束  
+命令操作  
+当服务器收到"1:1:0.8,30,5,10,10,7.0\n"命令时，将配置参数保存。收到"1:2\n"命令时开启迷宫程序子进程。收到"1:3\n"命令时结束迷宫程序子进程。详见  server.c/doMazeWork函数  
+
+Android客户端迷宫功能界面：  
+界面：fragment_maze.xml，通过拖拽UI单元，复制，后简单设定便可获得以下界面效果。（按钮为第三方库中的控件）  
+
 
 
