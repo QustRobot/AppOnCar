@@ -99,7 +99,7 @@ LM2596S开关电源稳压电路(支持6~12V宽电压输入，5V输出)
 程序结构图如下：  
 ![image](https://github.com/QustRobot/AppOnCar/blob/master/images/58.png)   
 程序流程图如下：
-![image](https://github.com/QustRobot/AppOnCar/blob/master/images/59.)   
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/59.PNG)   
 #### 3.2.1.0.全局变量和编译预处理指令  
 #define Front	28 //前方超声波模块Trig引脚  
 #define Left	24 //左方超声波模块Trig引脚  
