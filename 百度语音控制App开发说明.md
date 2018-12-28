@@ -1,13 +1,11 @@
-1.系统定义 
-=========================  
-1.1设计实现的功能   
-------------------------
+# 1.系统定义 
+## 1.1设计实现的功能   
 1.小车走迷宫  
 2.方向盘控制  
 3.语音控制  
 4.路径控制  
 
-1.2 可行性分析  
+## 1.2 可行性分析  
 
 1.所谓迷宫，即存在死路的带有墙壁的复杂的道路的集合。一般迷宫的路径存在不可预知性，即迷宫的路径情况不可知。所以想要小车能从迷宫路口走到迷宫出口，必然  要对迷宫类型进行定义和对小车的行车逻辑进行相应的具体设计。所以我们定义小车所走的迷宫为不存在环路的迷宫，避免小车行走时出现绕环运行的情况。还有迷宫可以 存在死路，那便要求小车能从死胡同中转出来。故可以采用小车贴墙走的方案，因为当小车按贴墙走时，迷宫的死胡同对于小车便成了通路，这样小车便可走出迷宫。当然我们需要定义小车贴哪边的墙行走，我们选择了左边。   
 当然，对于迷宫的算法，我们不只设计了以上一种算法，还有相似的居中走法，在进入死胡同时进行180°原地旋转，同时可以选择左路优先和右路优先。从原理上讲，这种算法和上种算法存在一般以上的相同思想，但是由于小车的电机和超声波传感器的不精准问题导致这种算法下的小车转弯的精确性更差，所以不得不舍弃。
@@ -20,21 +18,21 @@
 
 4.采用Android平台，首先在自定义控件中设置画布，当手指触摸到手机屏幕时，记录下触摸点，将触摸点坐标添加到路径数组中。然后绘制完成后再对路径数组中的触摸点进行路径分析，解析成一个包含路径信息的字符串，发送给服务器。最后服务器解析后按照解析后的路径信息执行响应的控制命令。  
 绘制后的路径数组解析可以按照以下原则进行解析。首先将前两个点的连线和垂直线进行角度计算和方向判定，并计算出连线的距离，将这3个结果拼接成命令字符串。然后将第3点和第2点连线和第2点和第1点连线进行先前的计算操作。以此类推直至全部的路径节点都被计算分析。最终发送命令字符串到客户端。  
-1.3 需求分析
+## 1.3 需求分析
 1.小车走迷宫，需要小车的电机控制，控制小车前进后退左转右转。需要小车的超声波传感器的距离检测，来监控小车是否碰壁和是否存在可走路径。  
 2.方向盘控制，需要方向盘的UI设计和逻辑输出，通过确定方向盘的变化来控制小车的运行状况。  
 3.语音控制，需要语音识别接口，如百度语音识别。语音输入，百度语音识别，获取正确的识别结果，发送至服务器控制小车运行状态。  
 4.路径控制，需要自定义路径绘制控件和路径解析逻辑，发送服务器，服务器再解析，控制小车行走。  
 
-2 系统总体设计  
-2.1 总体设计方案的确定  
+# 2 系统总体设计  
+## 2.1 总体设计方案的确定  
 首先要分为客户端程序和服务器程序，客户端程序为Android程序，使用Android Stduio开发软件。服务器程序为C语言程序，使用notepad++这个一般的文本编辑器来开发。分为服务器程序和单独的迷宫程序。  
-2.2 软硬件功能划分  
+## 2.2 软硬件功能划分  
 硬件功能：小车电机控制，超声波传感器控制  
 软件功能：Android客户端设计，即迷宫界面设计，方向盘界面和逻辑设计，语音界面设计，路径界面和逻辑设计。服务端命令解析系统。  
-2.3 硬件体系架构设计  
+## 2.3 硬件体系架构设计  
 采用wiringPi树莓派开发库，便捷开发小车电机控制和超声波传感器控制。  
-2.4 软件体系架构设计  
+## 2.4 软件体系架构设计  
 Android客户端：只有一个Activity其中包含一个ViewPager，ViewPager中包含4个自定义Fragment界面，每个Fragment界面代表一个功能界面。  
 ![image](https://github.com/QustRobot/AppOnCar/blob/master/images/42.png)  
 ![image](https://github.com/QustRobot/AppOnCar/blob/master/images/43.png)  
@@ -86,11 +84,12 @@ void doSoundoptWork(comd* cd);//语音处理函数
 void doPathoptWork(comd* cd);//路径处理函数
 ```
 
-3 系统详细设计 
+# 3 系统详细设计 
 
-3.1 硬件详细设计  
+## 3.1 硬件详细设计  
+
+### 1.初始化wiringPi和小车控制端口 
 ```
-1.初始化wiringPi和小车控制端口  
 #define Trig  28//前超声波  
 #define Echo  29   
 #define Trig1 24//左超声波  
@@ -115,7 +114,7 @@ softPwmCreate(5, 1, 100);
 softPwmCreate(6, 1, 100); 
 ```
 
-2.编写相应控制代码  
+### 2.编写相应控制代码  
 ```
 float disMeasure(int trig,int echo)//超声波测距
 {
@@ -252,7 +251,7 @@ void goLeftWall(float leftDis){//控制小车贴左墙行走
 
 ```
 
-3.2 软件详细设计  
+## 3.2 软件详细设计  
 服务端Socket逻辑：(server.c)  
 /*创建一个socket 指定IPv4协议族 TCP协议*/ 
 
@@ -347,8 +346,9 @@ void goLeftWall(float leftDis){//控制小车贴左墙行走
 
         return super.onOptionsItemSelected(item);
     }
-		
-	void sendData(final String str){
+	
+```
+ void sendData(final String str){
         mThreadPool.execute(new Runnable() {
             @Override
             public void run() {
@@ -371,10 +371,11 @@ void goLeftWall(float leftDis){//控制小车贴左墙行走
             }
         });
 }
+```
 
 ![image](https://github.com/QustRobot/AppOnCar/blob/master/images/45.png)  
 
-3.2.1迷宫控制  
+### 3.2.1迷宫控制  
 迷宫程序：  
 ```
 fileUtil.h/c:配置文件定义和实现  
@@ -445,7 +446,7 @@ Android客户端迷宫功能界面：
 
 逻辑：通过设置3个按钮的点击监听事件，当点击配置按钮时，发送配置编辑框中的内容即配置命令字符串到服务器中；当点击开始按钮时，发送开始命令字符串；当点击结束按钮时，发送结束命令字符串。详见com.carclienta.FragmentMaze.java文件。  
  
- 3.2.2方向盘控制  
+ ### 3.2.2方向盘控制  
 服务器方向盘功能：  
 命令格式  
 "2:4:1\n"  
@@ -461,7 +462,7 @@ Android客户端迷宫功能界面：
 ![image](https://github.com/QustRobot/AppOnCar/blob/master/images/48.png)   
 逻辑：自定义控件GamePad中有方位监听接口，实现这个接口，在接口实现中发送相应的诸如"2:4:1\n"的命令字符串到服务器中。详见com.carclienta.FragmentKeyOpt.java.自定义控件GamePad原理详见1.2可行性分析。代码详见com.carclienta.GamePad.java和com.carclienta.Rocker.java  
 
-3.2.3语音控制  
+### 3.2.3语音控制  
 服务器语音功能：  
 命令格式  
 "3:2\n"  
@@ -526,7 +527,7 @@ Android客户端迷宫功能界面：
 注：SimpleRecogListener MyRecognizer类为自定义类，在com.carclienta包下和core库中。  
 ![image](https://github.com/QustRobot/AppOnCar/blob/master/images/51.png)   
 
-3.2.4路径控制  
+### 3.2.4路径控制  
 服务器路径功能：  
 命令格式  
 "4:1:1=20,3=90,1=30,7=90,1=60"  
@@ -589,15 +590,15 @@ public class Path {
 }
 ```  
 
-4 功能测试  
+# 4 功能测试  
 由于小车以放回实验室，故无法做小车的功能测试截图，所以以下为Android客户端测试结果。  
-1.迷宫测试  
+## 1.迷宫测试  
 ![image](https://github.com/QustRobot/AppOnCar/blob/master/images/54.png)
-2.方向盘测试  
+## 2.方向盘测试  
 ![image](https://github.com/QustRobot/AppOnCar/blob/master/images/55.png)
-3.语音测试  
+## 3.语音测试  
 ![image](https://github.com/QustRobot/AppOnCar/blob/master/images/56.png)
-4.路径测试  
+## 4.路径测试  
 ![image](https://github.com/QustRobot/AppOnCar/blob/master/images/57.png)
 
 
