@@ -40,8 +40,8 @@ Android客户端：只有一个Activity其中包含一个ViewPager，ViewPager�
 ![image](https://github.com/QustRobot/AppOnCar/blob/master/images/43.png)  
 服务端命令解析系统：建立Socket服务器，读取来至Android客户端的命令数据，初步解析后分发给对应功能类型的处理函数处理。  
 ![image](https://github.com/QustRobot/AppOnCar/blob/master/images/44.png)    
-命令系统：
-(MainActivity.c)
+命令系统： 
+```
 typedef enum comdType{//命令类型     
     	MAZE=1,		//迷宫  
 	KEYOPT,		//方向盘  
@@ -65,6 +65,7 @@ typedef struct Comd{//命令结构体
           int opt;  
 	    }parm;  
 }comd;  
+```
 
 
 例如:  
@@ -77,16 +78,18 @@ typedef struct Comd{//命令结构体
 	"maze:end\n"  
 
 处理函数：
-
+```
 dowork(buf,len);//处理命令数据  
 void doMazeWork(comd* cd);//迷宫处理函数  
 void doKeyoptWork(comd* cd);//方向盘处理函数  
 void doSoundoptWork(comd* cd);//语音处理函数  
-void doPathoptWork(comd* cd);//路径处理函数  
+void doPathoptWork(comd* cd);//路径处理函数
+```
 
 3 系统详细设计 
 
 3.1 硬件详细设计  
+```
 1.初始化wiringPi和小车控制端口  
 #define Trig  28//前超声波  
 #define Echo  29   
@@ -110,8 +113,144 @@ softPwmCreate(1, 1, 100);
 softPwmCreate(4, 1, 100);  
 softPwmCreate(5, 1, 100);  
 softPwmCreate(6, 1, 100); 
+```
 
-2.编写相应控制代码（见相应的源代码）  
+2.编写相应控制代码  
+```
+float disMeasure(int trig,int echo)//超声波测距
+{
+	//struct timeval {
+	//	time_t tv_sec;	//64位系统下的time_t类型即long类型长度为8个字节
+	//	suseconds_t tv_usec;
+	//;
+    struct timeval tv1,tv2;
+    long start, stop;
+    float dis;
+    digitalWrite(trig, LOW);
+    delayMicroseconds(2);
+    digitalWrite(trig, HIGH);
+    delayMicroseconds(10); //发出超声波脉冲
+    digitalWrite(trig, LOW);
+    while(!(digitalRead(echo) == 1));
+    gettimeofday(&tv1, NULL); //获取当前时间
+    while(!(digitalRead(echo) == 0));
+    gettimeofday(&tv2, NULL); //获取当前时间
+    start = tv1.tv_sec * 1000000 + tv1.tv_usec; //微秒级的时间 
+    stop = tv2.tv_sec * 1000000 + tv2.tv_usec;
+    dis = (float)(stop - start) / 1000000 * 34000 / 2; //求出距离
+    return dis;
+}
+
+
+void brake(int time) //刹车，停车 time ms
+{
+    softPwmWrite(1, 0);
+    softPwmWrite(4, 0);
+    softPwmWrite(5, 0);
+    softPwmWrite(6, 0);
+    delay(time);//执行时间，可以调整
+}
+
+
+void run() // 前进
+{
+	softPwmWrite(1, 100*CONF.SPEEDSCALE); //左轮前进
+    softPwmWrite(4, 0);
+	softPwmWrite(5, 100*CONF.SPEEDSCALE); //右轮前进
+    softPwmWrite(6, 0);
+}
+
+//length	cm
+//curSpeed	cm/s 为正值
+void runLength(float length,float curSpeed){
+	float tempSpeed=curSpeed;
+	float endTime=0;
+	float frontDis=0;
+	
+	endTime=length*1000/tempSpeed+millis();//millis() wiringPiSetup开始后的ms
+
+	while(1){
+		run();
+		frontDis=disMeasure(Trig,Echo);
+		delay(50);
+		if(millis()>=endTime||frontDis<CONF.DIS_COLLIDE_FRONT){
+			brake(10);
+			break;
+		}
+			
+	}
+}
+
+
+void left(int time) //左转（左轮后退，右轮前进）
+{
+    softPwmWrite(1, 0);
+    softPwmWrite(4, 100*CONF.SPEEDSCALE);//左轮后退
+    softPwmWrite(5, 100*CONF.SPEEDSCALE);//右轮前进
+    softPwmWrite(6, 0); 
+    delay(time);
+}
+
+void leftAngle(unsigned char angle){
+	int angleToTime = (int)CONF.ANGLEPERMT*angle;
+	brake(200);
+	left(angleToTime);
+	brake(10);
+}
+
+void goLeft(float leftDis){
+	//runLength(leftDis/2,SPEED);
+	//leftAngle(90);
+	//runLength(leftDis,SPEED);
+	runLength(leftDis,SPEED);
+	leftAngle(90);
+	runLength(leftDis*1.4,SPEED);
+}
+
+void right(int time) //右转(右轮后退，左轮前进)
+{
+    softPwmWrite(1, 100*CONF.SPEEDSCALE);//左轮前进
+    softPwmWrite(4, 0); 
+    softPwmWrite(5, 0);
+    softPwmWrite(6, 100*CONF.SPEEDSCALE);
+    delay(time); //执行时间，可以调整
+}
+
+void rightAngle(unsigned char angle){
+	int angleToTime = (int)CONF.ANGLEPERMT*angle;
+	brake(200);
+	right(angleToTime);
+	brake(10);
+}
+
+
+void goLeftWall(float leftDis){//控制小车贴左墙行走
+	int angleToTime=0;
+	unsigned char leftFlag=leftDis>CONF.DIS_COLLIDE_MIN;
+	unsigned char leftFlag2=leftDis<CONF.DIS_COLLIDE_MAX;
+	if(!leftFlag){//距离左墙过近，右偏
+		angleToTime = (int)CONF.ANGLEPERMT*3;
+		//brake(100);
+		PLOG(">>>>>>>>>GO Right\n");
+		softPwmWrite(1, 100*CONF.SPEEDSCALE);//左轮前进
+		softPwmWrite(4, 0); 
+		softPwmWrite(5, 0);
+		softPwmWrite(6, 100*CONF.SPEEDSCALE);//右轮后退
+		delay(angleToTime);
+	}
+	if(!leftFlag2){//距离左墙过远，左偏
+		angleToTime = (int)CONF.ANGLEPERMT*3;
+		//brake(100);
+		PLOG("<<<<<<<<<GO Left\n");
+		softPwmWrite(1, 0);
+		softPwmWrite(4, 100*CONF.SPEEDSCALE);//左轮后退
+		softPwmWrite(5, 100*CONF.SPEEDSCALE);//右轮前进
+		softPwmWrite(6, 0);
+		delay(angleToTime);
+	}
+}
+
+```
 
 3.2 软件详细设计  
 服务端Socket逻辑：(server.c)  
@@ -165,7 +304,8 @@ softPwmCreate(6, 1, 100);
 	Close(cfd);
 
 
-客户端Socket逻辑：(MainActivity.java)
+客户端Socket逻辑：  
+(MainActivity.java)  
 	// 初始化线程池
 	mThreadPool = Executors.newCachedThreadPool();
 		
@@ -235,7 +375,8 @@ softPwmCreate(6, 1, 100);
 ![image](https://github.com/QustRobot/AppOnCar/blob/master/images/45.png)  
 
 3.2.1迷宫控制  
-迷宫程序：   
+迷宫程序：  
+```
 fileUtil.h/c:配置文件定义和实现  
 struct Conf{  
 	float SPEEDSCALE; //最高速的比例0-1  
@@ -250,8 +391,9 @@ int readConfFile(struct Conf* CONF);//读取配置文件
 int writeConfFile(struct Conf* CONF);//写入配置文件   
 void printConf(struct Conf CONF);//打印配置信息  
 int praseConfStr(char* str,struct Conf* CONF);//解析配置字符串  
-
+```
 maze.c:控制小车在迷宫中行走的主逻辑，主体逻辑如下  
+```
 while(1){
 		leftDis=disMeasure(Trig1,Echo1);//超声波测距，测出左边距离
 		PLOG("leftDis = %0.2f cm\n", leftDis);
@@ -275,30 +417,30 @@ while(1){
 			rightAngle(90+5);//进入右道
 		}
 	}
+```
+carOpt.h:小车的控制操作，见硬件详细设计    
+Debug.h:调试用的头文件，一个宏定义，当编译时添加-DPDEBUG参数是便可以将PLOG打印功能使能，反之PLOG不会打印任何信息。   
+#ifdef PDEBUG    
+#define PLOG(fmt,args...) printf(fmt,##args)    
+#else     
+#define PLOG(fmt,args...) /*do nothing*/   
+#endif   
+Makefile:编译脚本   
 
-carOpt.h:小车的控制操作，见硬件详细设计  
-Debug.h:调试用的头文件，一个宏定义，当编译时添加-DPDEBUG参数是便可以将PLOG打印功能使能，反之PLOG不会打印任何信息。  
-#ifdef PDEBUG   
-#define PLOG(fmt,args...) printf(fmt,##args)   
-#else    
-#define PLOG(fmt,args...) /*do nothing*/  
-#endif  
-Makefile:编译脚本  
-
-服务器迷宫功能：  
-命令格式  
+服务器迷宫功能：    
+命令格式   
 "1:1:0.8,30,5,10,10,7.0\n"  
 "1:2\n"  
 "1:3\n"   
 命令意义  
 "maze:conf:0.8,30,5,10,10,7.0\n"//命令类型:迷宫;配置参数为0.8,30...  
-"maze:start\n"//命令类型:迷宫;开始  
-"maze:end\n"//命令类型:迷宫;结束  
-命令操作  
-当服务器收到"1:1:0.8,30,5,10,10,7.0\n"命令时，将配置参数保存。收到"1:2\n"命令时开启迷宫程序子进程。收到"1:3\n"命令时结束迷宫程序子进程。详见  server.c/doMazeWork函数  
+"maze:start\n"//命令类型:迷宫;开始    
+"maze:end\n"//命令类型:迷宫;结束    
+命令操作    
+当服务器收到"1:1:0.8,30,5,10,10,7.0\n"命令时，将配置参数保存。收到"1:2\n"命令时开启迷宫程序子进程。收到"1:3\n"命令时结束迷宫程序子进程。详见  server.c/doMazeWork函数    
 
-Android客户端迷宫功能界面：  
-界面：fragment_maze.xml，通过拖拽UI单元，复制，后简单设定便可获得以下界面效果。（按钮为第三方库中的控件）  
+Android客户端迷宫功能界面：   
+界面：fragment_maze.xml，通过拖拽UI单元，复制，后简单设定便可获得以下界面效果。（按钮为第三方库中的控件）   
 
 
 
