@@ -440,7 +440,170 @@ Makefile:编译脚本
 当服务器收到"1:1:0.8,30,5,10,10,7.0\n"命令时，将配置参数保存。收到"1:2\n"命令时开启迷宫程序子进程。收到"1:3\n"命令时结束迷宫程序子进程。详见  server.c/doMazeWork函数    
 
 Android客户端迷宫功能界面：   
-界面：fragment_maze.xml，通过拖拽UI单元，复制，后简单设定便可获得以下界面效果。（按钮为第三方库中的控件）   
+界面：fragment_maze.xml，通过拖拽UI单元，复制，后简单设定便可获得以下界面效果。（按钮为第三方库中的控件）  
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/46.png)   
+
+逻辑：通过设置3个按钮的点击监听事件，当点击配置按钮时，发送配置编辑框中的内容即配置命令字符串到服务器中；当点击开始按钮时，发送开始命令字符串；当点击结束按钮时，发送结束命令字符串。详见com.carclienta.FragmentMaze.java文件。  
+ 
+ 3.2.2方向盘控制  
+服务器方向盘功能：  
+命令格式  
+"2:4:1\n"  
+命令意义  
+"keyopt:opt:1\n"//命令类型:方向盘;前进  
+// 0:停止 1:前进 2:前进左转 3:左转 4:后退左转 ...  
+命令操作  
+当服务器收到"2:4:1\n"命令时,开始方向盘操作并控制小车运动。详见server.c/doKeyoptWork函数  
+
+Android客户端迷宫功能界面：  
+界面：fragment_keyopt.xml，使用自定义控件GamePad  
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/47.png)   
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/48.png)   
+逻辑：自定义控件GamePad中有方位监听接口，实现这个接口，在接口实现中发送相应的诸如"2:4:1\n"的命令字符串到服务器中。详见com.carclienta.FragmentKeyOpt.java.自定义控件GamePad原理详见1.2可行性分析。代码详见com.carclienta.GamePad.java和com.carclienta.Rocker.java  
+
+3.2.3语音控制  
+服务器语音功能：  
+命令格式  
+"3:2\n"  
+"3:4:1\n"  
+"3:3\n"  
+命令意义  
+"soundopt:start\n"//命令类型:语音;开始  
+"soundopt:opt:1\n"//命令类型:语音;前进  
+// 0:停止 1:前进 2:前进左转 3:左转 4:后退左转 ...  
+"soundopt:end\n"//命令类型:语音;结束  
+命令操作  
+当服务器收到"3:2\n"命令时表示服务器现在处理的命令为语音控制命令且为开始态；当服务器收到诸如"3:4:1\n"命令时，服务器便控制小车做出相应的运动；当服务器收到诸如"3:3\n"命令时，结束当前命令类别的操作。详见server.c/doSoundoptWork函数  
+
+
+Android客户端迷宫功能界面：  
+界面：fragment_soundopt.xml通过拖拽UI单元，后简单设定便可获得以下界面效果。（按钮为第三方库中的控件）  
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/49.png)  
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/50.png)  
+逻辑：首先集成百度语音识别，步骤如下。然后在handler处理信息函数根据识别状态来循环开启语音识别，这样便可以做到不间断的语音命令控制。并识别成功是发送相应命令字符串。详见com.carclienta.FragmentSoundOpt.java  
+```
+	// 集成步骤 1.1 新建一个回调类，识别引擎会回调这个类告知重要状态和识别结果
+	listener = new SimpleRecogListener(handler);
+	// 集成步骤 1.2 初始化：new一个IRecogListener示例 & new 一个 MyRecognizer 示例
+	myRecognizer = new MyRecognizer(getActivity(),listener);
+	if (enableOffline) {
+		// 集成步骤 1.3（可选）加载离线资源。offlineParams是固定值，复制到您的代码里即可
+		offlineParams = OfflineRecogParams.fetchOfflineParams();
+		myRecognizer.loadOfflineEngine(offlineParams);
+	}
+	// 集成步骤2.1 开始识别
+	myRecognizer.start(offlineParams);
+	// 集成步骤2.2 结束识别		
+	myRecognizer.stop();
+				
+	// 集成步骤3 释放资源
+	// 如果之前调用过myRecognizer.loadOfflineEngine()， release()里会自动调用释放离线资源
+	myRecognizer.release();
+		
+	//android 6.0 以上需要动态申请权限,详见FragmentSoundOpt.java/initPermission函数
+	//AndroidManifest.xml菜单文件配置-权限
+	<uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+	//AndroidManifest.xml菜单文件配置-百度语音应用信息
+	<application>
+        <meta-data
+            android:name="com.baidu.speech.APP_ID"
+            android:value="xxx" />
+        <meta-data
+            android:name="com.baidu.speech.API_KEY"
+            android:value="xxx" />
+        <meta-data
+            android:name="com.baidu.speech.SECRET_KEY"
+            android:value="xxx" />
+</application>
+```
+
+注：SimpleRecogListener MyRecognizer类为自定义类，在com.carclienta包下和core库中。  
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/51.png)   
+
+3.2.4路径控制  
+服务器路径功能：  
+命令格式  
+"4:1:1=20,3=90,1=30,7=90,1=60"  
+"4:2"  
+"4:3"  
+命令意义  
+
+"pathopt:conf:1=20,3=90,1=30,7=90,1=60"  
+//路径链表 1=20,3=90,1=30,7=90,1=60  
+//1:前进		1=距离  
+//3,5:左右转	5,7=角度  
+//前进20cm，左转90°，前进30cm...  
+"pathopt:start"//命令类型:路径控制;开始  
+"pathopt:end"//命令类型:路径控制;结束  
+命令操作
+当服务器收到诸如"4:1:1=20,3=90,1=30,7=90,1=60"命令时，将路径链表解析到路径结构体中，当收到"4:2"命令后，开启子线程，并从路径结构体中获取路径节点，根据路径节点的信息控制小车运动状态。当收到"4:3"命令后，关闭子线程，结束小车的路径控制。详见server.c/doPathoptWork函数。以下为路径结构体结构：（详见Path.h/c） 
+```
+#define PATHMAX 100 //路径节点默认最多数目
+
+typedef enum Direction{//方向
+	RUN=1,
+	LEFT=3,
+	BACK=5,
+	RIGHT=7
+}Dir;
+
+typedef struct Node{//路径节点
+	Dir dir;
+	int val;
+	struct Node* next;
+	struct Node* pre;
+}node;
+
+typedef struct Path{//路径
+	node* head;
+	node* tail;
+	int num;
+}path;
+```
+
+
+Android客户端迷宫功能界面：    
+界面：fragment_pathopt.xml,主要为一个ImageView和android.view.ext.SatelliteMenu（第3方自定义控件）。效果如下：  
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/52.png)
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/53.png)   
+
+逻辑：设定（第3方自定义控件）SatelliteMenu卫星菜单的点击监听，有画布清理，路径字符串发送，开始命令命令发送，结束命令字符串发送。路径绘制原理详见1.2可行性分析。代码详见com.carclienta.FragmentSoundOpt.java和com.carclienta.Path.java,以下为Path.java的大体情况： 
+```
+public class Path {
+    private double scale;//每像素代表的距离 cm/dp
+    public Path(double scale) //构造函数
+	//解析路径，将触摸点数组，转换为路径命令字符串
+    public String prasePath(List<FragmentPathOpt.point> lp)
+	//获取连线1和连线2的夹角
+    private int getDegrees(float firstX, float firstY, float secondX, float secondY, float thridX, float thridY)
+	//获取连线2相对于连线1的方位
+    private int getDir(float firstX, float firstY, float secondX, float secondY, float thridX, float thridY)
+	//获取连线2的长度
+    private double getDistance(float firstX, float firstY, float secondX, float secondY)
+}
+```  
+
+4 功能测试  
+由于小车以放回实验室，故无法做小车的功能测试截图，所以以下为Android客户端测试结果。  
+1.迷宫测试  
+2.方向盘测试  
+3.语音测试  
+4.路径测试  
+
+
+
+
+
+
+
+
+
 
 
 
