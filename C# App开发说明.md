@@ -172,8 +172,8 @@ return dis;
 此函数主要用于远程遥控，实现线性动力控制和线性差速转向控制。  
 #### 3.2.1.5.测距回传函数void *RetDis(void *args)  
 
-#####测距回传流程图如下：
-![image](https://github.com/QustRobot/AppOnCar/blob/master/images/60.)   
+##### 测距回传流程图如下：
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/60.PNG)   
 ```
 while (ret)
 {
