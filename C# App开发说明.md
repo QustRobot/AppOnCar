@@ -173,7 +173,7 @@ return dis;
 #### 3.2.1.5.测距回传函数void *RetDis(void *args)  
 
 #####测距回传流程图如下：
-![image](https://github.com/QustRobot/AppOnCar/blob/master/images/60.png)   
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/60.)   
 ```
 while (ret)
 {
@@ -197,7 +197,7 @@ while (ret)
 #### 3.2.1.6.迷宫寻路函数 void *MazeRunner(void *args)  
 
 迷宫寻路流程图如下：  
-![image](https://github.com/QustRobot/AppOnCar/blob/master/images/61.png)    
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/61.PNG)    
 通过线程取消函数pthread_cancel()可以直接终止。 
 ```
 while (maze) 
