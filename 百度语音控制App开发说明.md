@@ -38,30 +38,33 @@ Android客户端：只有一个Activity其中包含一个ViewPager，ViewPager�
 ![image](https://github.com/QustRobot/AppOnCar/blob/master/images/43.png)  
 服务端命令解析系统：建立Socket服务器，读取来至Android客户端的命令数据，初步解析后分发给对应功能类型的处理函数处理。  
 ![image](https://github.com/QustRobot/AppOnCar/blob/master/images/44.png)    
-命令系统：  
+命令系统：
+
 typedef enum comdType{//命令类型     
     	MAZE=1,		//迷宫  
-	    KEYOPT,		//方向盘  
-	    SOUNDOPT,	//语音  
-	    PATHOPT		//路径  
+	KEYOPT,		//方向盘  
+	SOUNDOPT,	//语音  
+	PATHOPT		//路径  
 }cType;  
 
 typedef enum comdSubType{//命令子类型    
     	CONF=1,		//参数,迷宫配置参数或路径链表  
-	    START,		//开始  
-	     END,		//结束  
-	    OPT			//操作项0-8  
+	START,		//开始  
+	END,		//结束  
+        OPT			//操作项0-8  
 				//0:停止 1:前进 2:前进左转 3:左转 4:后退左转 ...  
 }csType;    
 
 typedef struct Comd{//命令结构体  
      	cType ct;  
-	    csType cst;  
-	    union{  
-	    	char* conf;  
-		    int opt;  
+	csType cst;  
+	union{  
+	  char* conf;  
+          int opt;  
 	    }parm;  
 }comd;  
+
+
 例如:  
 	"1:1:0.8,30,5,10,10,7.0\n"   
 	"1:2\n"  
@@ -71,7 +74,8 @@ typedef struct Comd{//命令结构体
 	"maze:start\n"  
 	"maze:end\n"  
 
-处理函数：  
+处理函数：
+
 dowork(buf,len);//处理命令数据  
 void doMazeWork(comd* cd);//迷宫处理函数  
 void doKeyoptWork(comd* cd);//方向盘处理函数  
@@ -103,6 +107,129 @@ pinMode(6, OUTPUT);  //IN4 控制右边轮胎后退
 softPwmCreate(1, 1, 100);  
 softPwmCreate(4, 1, 100);  
 softPwmCreate(5, 1, 100);  
-softPwmCreate(6, 1, 100);  
-以上相应的代码见相关代码文档   
+softPwmCreate(6, 1, 100); 
+
+2.编写相应控制代码（见相应的源代码）  
+
+3.2 软件详细设计  
+服务端Socket逻辑：(server.c)  
+/*创建一个socket 指定IPv4协议族 TCP协议*/ 
+
+    sfd = Socket(AF_INET, SOCK_STREAM, 0);
+    bzero(&serv_addr, sizeof(serv_addr));           //将整个结构体清零
+    serv_addr.sin_family = AF_INET;                 //选择协议族为IPv4
+    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);  //监听本地所有IP地址
+    serv_addr.sin_port = htons(SERV_PORT);          //绑定端口号    
+
+	/*绑定服务器地址结构*/
+    ret=Bind(sfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr));
+	
+	/*设定链接上限,注意此处不阻塞*/
+    ret=Listen(sfd, 2);                                
+    printf("wait for client connect ...\n");
+
+	/*获取客户端地址结构大小*/ 
+    clie_addr_len = sizeof(clie_addr_len);
+	
+	/*参数1是sfd; 参2传出参数, 参3传入传出参数, 全部是client端的参数*/
+	cfd = Accept(sfd, (struct sockaddr *)&clie_addr, &clie_addr_len);
+	printf("cfd = ----%d\n", cfd);
+	inet_ntop(AF_INET, &clie_addr.sin_addr.s_addr, clie_IP, sizeof(clie_IP));
+	printf("client IP: %s  port:%d\n", clie_IP, ntohs(clie_addr.sin_port));
+    while (1) {
+		/*读取客户端发送数据*/
+		len = Read(cfd, buf, sizeof(buf));
+		if(len==0)
+			count++;
+		else if(len>0){
+			//PLOG("len:%d\n",len);
+			Write(STDOUT_FILENO, buf, len);
+
+			/*处理客户端数据*/
+			dowork(buf,len);
+		}
+		if(count>0xff||len<0)//继续监听客户端连接
+		{
+			count=0;
+			Close(cfd);
+			cfd = Accept(sfd, (struct sockaddr *)&clie_addr, &clie_addr_len);
+			printf("cfd = ----%d\n", cfd);
+			inet_ntop(AF_INET, &clie_addr.sin_addr.s_addr, clie_IP, sizeof(clie_IP));
+			printf("client IP: %s  port:%d\n", clie_IP, ntohs(clie_addr.sin_port));
+		}
+    }
+	 /*关闭链接*/
+    Close(sfd);
+	Close(cfd);
+
+
+客户端Socket逻辑：(MainActivity.java)
+	// 初始化线程池
+	mThreadPool = Executors.newCachedThreadPool();
+		
+	@Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        int id = item.getItemId();
+
+        if (id == R.id.Connnect) {
+			// 利用线程池直接开启一个线程 & 执行该线程
+            mThreadPool.execute(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        // 创建Socket对象 & 指定服务端的IP 及 端口号
+                        socket = new Socket("192.168.12.1", 6666);
+                        // 判断客户端和服务器是否连接成功
+                        System.out.println(socket.isConnected());
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
+            return true;
+        }else if(id==R.id.Disconnect){
+            try {
+                // 断开 客户端发送到服务器 的连接，即关闭输出流对象OutputStream
+                //outputStream.close();
+                // 断开 服务器发送到客户端 的连接，即关闭输入流读取器对象BufferedReader
+                //br.close();
+                // 最终关闭整个Socket连接
+                socket.close();
+                // 判断客户端和服务器是否已经断开连接
+                System.out.println(socket.isConnected());
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            return true;
+        }
+
+        return super.onOptionsItemSelected(item);
+    }
+		
+	void sendData(final String str){
+        mThreadPool.execute(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    if(socket==null)
+                        return;
+                    // 步骤1：从Socket 获得输出流对象OutputStream
+                    // 该对象作用：发送数据
+                    outputStream = socket.getOutputStream();
+
+                    // 步骤2：写入需要发送的数据到输出流对象中
+                    outputStream.write(str.getBytes("utf-8"));
+                    // 特别注意：数据的结尾加上换行符才可让服务器端的readline()停止阻塞
+
+                    // 步骤3：发送数据到服务端
+                    outputStream.flush();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+}
+
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/45.png)
+
 
