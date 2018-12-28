@@ -141,7 +141,8 @@ while(1)
 ```
 2.小车服务端关键程序  
 （1）main()函数  
-在main函数中创建两个线程，一个手动控制线程，一个TCP通信线程。在手动控制线程中，设置while循环，动作状态变量shouDongActive的值映射为小车的动作状态。  ```
+在main函数中创建两个线程，一个手动控制线程，一个TCP通信线程。在手动控制线程中，设置while循环，动作状态变量shouDongActive的值映射为小车的动作状态。 
+```
 int main()  
 {  
     wiringPiSetup();  
@@ -154,7 +155,7 @@ int main()
     softPwmCreate(4,1,500);  
     softPwmCreate(5,1,500);  
     softPwmCreate(6,1,500);  
-    ////////////////////////////////////////////创建线程：  
+   //创建线程：  
     ret=pthread_create(&id1,NULL,(void *) shouDongThread,NULL);//←手动控制线程  
     if(ret!=0)  
     {  
@@ -170,7 +171,6 @@ int main()
     pthread_join(id1,NULL);  
     pthread_join(id2,NULL);  
 }  
-```
 ```
 （2）TCP通信线程  
 在TCP线程中，先建立连接，接收到的字符存入buf中，buf的内容映射为小车动作状态变量shouDongActive的值，和创建、结束迷宫进程。
