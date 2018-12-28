@@ -592,9 +592,13 @@ public class Path {
 4 功能测试  
 由于小车以放回实验室，故无法做小车的功能测试截图，所以以下为Android客户端测试结果。  
 1.迷宫测试  
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/54.png)
 2.方向盘测试  
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/55.png)
 3.语音测试  
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/56.png)
 4.路径测试  
+![image](https://github.com/QustRobot/AppOnCar/blob/master/images/57.png)
 
 
 
